@@ -12,6 +12,7 @@
     <PackageReference Include="Discord.Net.Rest" Version="2.1.1" />
     <PackageReference Include="Discord.Net.Webhook" Version="2.1.1" />
     <PackageReference Include="Discord.Net.WebSocket" Version="2.1.1" />
+    <PackageReference Include="Google.Apis.YouTube.v3" Version="1.44.0.1869" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="4.7.0" />
     <PackageReference Include="VideoLibrary" Version="3.0.0" />
   </ItemGroup>

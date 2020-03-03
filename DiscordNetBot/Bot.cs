@@ -19,7 +19,6 @@ namespace DiscordNetBot
 
         #endregion
 
-        [Obsolete]
         public static async Task RunAsync()
         {
             var config = new DiscordSocketConfig
@@ -31,7 +30,7 @@ namespace DiscordNetBot
 
             Client = new DiscordSocketClient(config);
 
-            await Client.LoginAsync(TokenType.Bot, ConfigurationSettings.AppSettings["Token"]);
+            await Client.LoginAsync(TokenType.Bot, ConfigurationManager.AppSettings["Token"]);
 
             await Client.StartAsync();
 
@@ -55,7 +54,6 @@ namespace DiscordNetBot
             await Task.Delay(-1);
         }
 
-        [Obsolete]
         private static async Task Client_Ready()
         {
             Console.WriteLine("Bot is Ready");
@@ -63,6 +61,10 @@ namespace DiscordNetBot
             await Client.SetGameAsync("Developed by CRNYY", type: ActivityType.Playing);
 
             Directory.CreateDirectory($"{Environment.CurrentDirectory}\\Musics");
+
+            MusicDownloader.Initialize();
+
+            await MusicDownloader.GetSearchResults("Friz");
         }
 
         private static async Task HandleCommandAsync(SocketMessage messageParam)

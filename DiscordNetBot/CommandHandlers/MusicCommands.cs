@@ -19,7 +19,21 @@ namespace DiscordNetBot
     {
         #region Public Properties
 
-        public static Queue<YouTubeVideo> MusicQueue = new Queue<YouTubeVideo>();
+        public static Queue<MusicYT> MusicQueue = new Queue<MusicYT>();
+
+        public static bool MusicPlaying = false;
+
+        #endregion
+
+        #region Constructor
+
+        public MusicCommands()
+        {
+            foreach (var music in Directory.GetFiles($"{Environment.CurrentDirectory}\\Musics\\"))
+            {
+                File.Delete(music);
+            }
+        }
 
         #endregion
 
@@ -115,7 +129,12 @@ namespace DiscordNetBot
         {
             var audioClient = await Join();
 
-            var video = await MusicDownloader.DownloadMusicFromYT(Url);
+            var video = new MusicYT();
+
+            if (Url.Contains("youtube.com/"))
+                video = await MusicDownloader.DownloadMusicFromYT(Url);
+            else
+                video = await ShowResultsFromSearch(Url);
 
             MusicQueue.Enqueue(video);
 
@@ -128,13 +147,62 @@ namespace DiscordNetBot
         {
             foreach (var music in MusicQueue)
             {
-                File.Delete(MusicHelpers.TitleToPath(MusicQueue.Dequeue().Title));
+                File.Delete(MusicHelpers.TitleToPath(music.Title));
             }
+            MusicQueue.Clear();
+        }
+
+        [Command(nameof(Add), RunMode = RunMode.Async)]
+        [Summary("Adds the song to the playlist")]
+        public async Task Add([Remainder] string URL)
+        {
+            var video = await GetMusicFromURL(URL);
+
+            MusicQueue.Enqueue(video);
+
+            if(!MusicPlaying)
+                await PlayMusicAsync(await Join(), video);
         }
 
         #endregion
 
         #region Private Helpers
+
+        private async Task<MusicYT> ShowResultsFromSearch(string searchText)
+        {
+            var musicList = await MusicDownloader.GetSearchResults(searchText);
+
+            var fieldEmbeds = new List<EmbedFieldBuilder>();
+
+            var index = 1;
+            foreach (var music in musicList)
+            {
+                fieldEmbeds.Add(new EmbedFieldBuilder
+                {
+                    Name = $"{index}. Result",
+                    Value = $"{music.Title} by {music.Channel}."
+                });
+                index++;
+            }
+
+            var resultEmbed = new EmbedBuilder
+            {
+                Title = $"Search results of {searchText}",
+                Color = Color.Green,
+                Fields = fieldEmbeds,
+            };
+
+            var message = await ReplyAsync(embed: resultEmbed.Build());
+            var digitOne = new Emoji("\U00000031");
+            await message.AddReactionsAsync(new IEmote[] { digitOne });
+
+            return musicList[0];
+        }
+
+        private async Task<MusicYT> GetMusicFromURL(string URL)
+        {
+            return URL.Contains("youtube.com/") ? await MusicDownloader.DownloadMusicFromYT(URL) : await ShowResultsFromSearch(URL);
+        }
 
         private Process CreateStream(string path)
         {
@@ -147,23 +215,27 @@ namespace DiscordNetBot
             });
         }
 
-        private async Task PlayMusicAsync(IAudioClient client, YouTubeVideo video)
+        private async Task PlayMusicAsync(IAudioClient client, MusicYT video)
         {
             EmbedBuilder MusicEmbed;
 
-            using (var ffmpeg = CreateStream(MusicHelpers.TitleToPath(video.Title)))
+            using (var ffmpeg = CreateStream($"Musics\\{video.Title}.mp3"))
             using (var output = ffmpeg.StandardOutput.BaseStream)
             using (var discord = client.CreatePCMStream(AudioApplication.Mixed))
             {
                 try
                 {
+                    MusicPlaying = true;
+
                     await output.CopyToAsync(discord);
                 }
                 finally
                 {
                     await discord.FlushAsync();
 
-                    if(File.Exists(video.Title))
+                    MusicPlaying = false;
+
+                    if (File.Exists(MusicHelpers.TitleToPath(video.Title)))
                     {
                         File.Delete(video.Title);
                         Console.WriteLine($"Successfully deleted {video.Title}");
@@ -173,7 +245,6 @@ namespace DiscordNetBot
                         await PlayMusicAsync(client, MusicQueue.Dequeue());
                     else
                     {
-
                         await Leave();
                     }
                 }
