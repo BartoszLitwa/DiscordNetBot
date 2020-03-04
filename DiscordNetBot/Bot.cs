@@ -48,7 +48,7 @@ namespace DiscordNetBot
 
             await CmdService.AddModulesAsync(Assembly.GetEntryAssembly(), null);
 
-            CmdService.AddTypeReader(typeof(bool), new BooleanTypeReader());
+            //CmdService.AddTypeReader(typeof(bool), new BooleanTypeReader());
 
             // Wait forever
             await Task.Delay(-1);
@@ -64,6 +64,8 @@ namespace DiscordNetBot
 
             MusicDownloader.Initialize();
 
+            Emojis.Initialize();
+
             await MusicDownloader.GetSearchResults("Friz");
         }
 
@@ -77,7 +79,7 @@ namespace DiscordNetBot
             int argPos = 0;
 
             // Determine if the message is a command based on the prefix and make sure no bots trigger commands
-            if (!(message.HasCharPrefix('!', ref argPos) ||
+            if (!(message.HasCharPrefix('@', ref argPos) ||
                 message.HasMentionPrefix(Client.CurrentUser, ref argPos)) ||
                 message.Author.IsBot)
                 return;

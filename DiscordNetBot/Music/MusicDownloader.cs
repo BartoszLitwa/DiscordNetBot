@@ -49,7 +49,6 @@ namespace DiscordNetBot
         {
             var searchListRequest = YTService.Search.List("snippet");
             searchListRequest.Q = search;
-            searchListRequest.Order = SearchResource.ListRequest.OrderEnum.ViewCount;
             searchListRequest.Type = "video";
             searchListRequest.MaxResults = 5;
 
