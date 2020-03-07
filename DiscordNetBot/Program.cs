@@ -1,4 +1,7 @@
 ﻿using System;
+using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.Hosting;
+using System.Configuration;
 
 namespace DiscordNetBot
 {
@@ -6,7 +9,13 @@ namespace DiscordNetBot
     {
         static void Main(string[] args)
         {
-            Bot.RunAsync().GetAwaiter().GetResult();
+            CreateHostBuilder(args).Build().Run();
         }
+
+        public static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args).ConfigureWebHostDefaults(webBuilder =>
+            {
+                webBuilder.UseStartup<Startup>();
+            });
     }
 }

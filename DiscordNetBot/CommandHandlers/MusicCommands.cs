@@ -1,14 +1,14 @@
 ﻿using Discord;
 using Discord.Audio;
 using Discord.Commands;
-using Discord.WebSocket;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using static DiscordNetBot.Emojis;
 
 namespace DiscordNetBot
 {
@@ -27,17 +27,15 @@ namespace DiscordNetBot
 
         public static MusicYT CurrentlyPlaying;
 
+        public static IAudioChannel CurrentAudioChannel;
+
         #endregion
 
         #region Constructor
 
         public MusicCommands()
         {
-            foreach (var music in Directory.GetFiles($"{Environment.CurrentDirectory}\\Musics\\"))
-            {
-                if (File.Exists(music))
-                    File.Delete(music);
-            }
+            
         }
 
         #endregion
@@ -57,9 +55,7 @@ namespace DiscordNetBot
         {
             EmbedBuilder embed;
 
-            var voiceChannel = (Context.Client as IGuildUser)?.VoiceChannel;
-
-            if (voiceChannel == null)
+            if (CurrentAudioChannel == null)
             {
                 embed = new EmbedBuilder
                 {
@@ -73,14 +69,16 @@ namespace DiscordNetBot
                 return;
             }
 
-            await voiceChannel.DisconnectAsync();
+            await CurrentAudioChannel.DisconnectAsync();
+
+            CurrentAudioChannel = null;
 
             embed = new EmbedBuilder
             {
                 Title = $"Left the Voice Channel",
-                Color = Color.Blue,
+                Color = Color.Purple,
                 ThumbnailUrl = Context.User.GetAvatarUrl(),
-                Description = $"Successfully left from the {voiceChannel.Name} Voice Channel requested by {Context.User.Username}."
+                Description = $"Successfully left from the {CurrentAudioChannel.Name} Voice Channel requested by {Context.User.Username}."
             };
 
             await ReplyAsync(embed: embed.Build()).ConfigureAwait(false);
@@ -90,14 +88,15 @@ namespace DiscordNetBot
         [Summary("Plays the music in the voice channel that it is in")]
         public async Task Play([Remainder] string Url)
         {
+            if(MusicPlaying)
+            {
+                await Add(Url);
+                return;
+            }
+
             var audioClient = await JoinChannel((Context.User as IGuildUser).VoiceChannel);
 
-            MusicYT video;
-
-            if (Url.Contains("youtube.com/"))
-                video = await MusicDownloader.DownloadMusicFromYT(Url);
-            else
-                video = await ShowResultsFromSearch(Url);
+            MusicYT video = await GetMusicFromURL(Url);
 
             MusicQueue.Enqueue(video);
 
@@ -108,15 +107,15 @@ namespace DiscordNetBot
         [Summary("Clears the song request queue")]
         public async Task Clear()
         {
-            foreach (var music in MusicQueue)
-            {
-                File.Delete(MusicHelpers.TitleToPath(music.Title));
-            }
+            MusicHelpers.DeleteMusicStored(CurrentlyPlaying.Title);
+
             MusicQueue.Clear();
 
             var embed = new EmbedBuilder
             {
                 Title = "Cleared the Queue",
+                ThumbnailUrl = Context.Client.CurrentUser.GetAvatarUrl(),
+                Color = Color.Red,
             };
 
             await ReplyAsync(embed: embed.Build()).ConfigureAwait(false);
@@ -145,7 +144,8 @@ namespace DiscordNetBot
                         Name = "Position in Queue",
                         Value = MusicQueue.Count
                     }
-                }
+                },
+                Color = Color.Green
             };
 
             await ReplyAsync(embed: EmbedBuilder.Build()).ConfigureAwait(false);
@@ -162,21 +162,76 @@ namespace DiscordNetBot
         {
             if (MusicPlaying)
             {
-                await Discord.DisposeAsync();
+                await Discord.ClearAsync(CancellationToken.None);
 
                 var MusicEmbed = new EmbedBuilder
                 {
                     Title = $"Skipped {CurrentlyPlaying.Title}",
                     ThumbnailUrl = CurrentlyPlaying.ThumbnailURL,
+                    Color = Color.Green
                 };
 
                 await ReplyAsync(embed: MusicEmbed.Build()).ConfigureAwait(false);
 
                 if (MusicQueue.Count > 0)
                 {
-                    await PlayMusicAsync(await JoinChannel(), MusicQueue.Dequeue());
+                    await PlayMusicAsync(await JoinChannel((Context.User as IGuildUser).VoiceChannel), MusicQueue.Dequeue());
                 }
             }
+            else
+            {
+                var MusicEmbed = new EmbedBuilder
+                {
+                    Title = $"Nothing playing",
+                    Description = $"Currently any music is played. You can use {ConfigurationManager.AppSettings["Prefix"].ToCharArray()[0]}play" +
+                    $" or {ConfigurationManager.AppSettings["Prefix"].ToCharArray()[0]}add to play the music in Your Voice Channel. Try it now!",
+                    ThumbnailUrl = Context.Client.CurrentUser.GetAvatarUrl(),
+                    Color = Color.Red
+                };
+
+                await ReplyAsync(embed: MusicEmbed.Build()).ConfigureAwait(false);
+            }
+        }
+
+        [Command(nameof(Queue), RunMode = RunMode.Async)]
+        [Summary("Shows the current playlist")]
+        public async Task Queue()
+        {
+            var Fields = new List<EmbedFieldBuilder>();
+
+            if (MusicQueue.Count > 0)
+            {
+                var index = 1;
+                foreach (var video in MusicQueue)
+                {
+                    Fields.Add(new EmbedFieldBuilder
+                    {
+                        Name = $"{index}. in Queue",
+                        Value = $"{video.Title}",
+                    });
+                    index++;
+                }
+            }
+            else
+            {
+                Fields.Add(new EmbedFieldBuilder
+                {
+                    Name = "Queue is empty",
+                    Value = "The current Queue is empty you can fill it with your own music. \n" +
+                    $"Use commands {ConfigurationManager.AppSettings["Prefix"].ToCharArray()[0]}play" +
+                    $" or {ConfigurationManager.AppSettings["Prefix"].ToCharArray()[0]}add to play the music in Your Voice Channel. Try it now!"
+                });
+            }
+
+            var QueueEmbed = new EmbedBuilder
+            {
+                Title = $"Current Queue of songs",
+                ThumbnailUrl = Context.Client.CurrentUser.GetAvatarUrl(),
+                Fields = Fields,
+                Color = Color.Green
+            };
+
+            await ReplyAsync(embed: QueueEmbed.Build()).ConfigureAwait(false);
         }
 
         #endregion
@@ -195,13 +250,14 @@ namespace DiscordNetBot
                                        new Emoji("\U0001F911"),  //Money
                                        new Emoji("\U0001F975"),};//Hot
 
+            var stringToReplace = '"';
             var index = 0;
             foreach (var music in musicList)
             {
                 fieldEmbeds.Add(new EmbedFieldBuilder
                 {
                     Name = $"{index + 1}. Result {emojis[index]}",
-                    Value = $"{music.Title} by {music.Channel}."
+                    Value = $"{music.Title.Replace("&quot;", stringToReplace.ToString())} by {music.Channel}."
                 });
                 index++;
             }
@@ -267,10 +323,6 @@ namespace DiscordNetBot
                 {
                     MusicPlaying = true;
 
-                    await output.CopyToAsync(Discord);
-
-                    CurrentlyPlaying = video;
-
                     MusicEmbed = new EmbedBuilder
                     {
                         Title = $"Playing {video.Title}",
@@ -297,10 +349,16 @@ namespace DiscordNetBot
                                 Name = "Published",
                                 Value = video.PublishedAt
                             },
-                        }
+                        },
+                        Color = Color.Green
                     };
 
                     await ReplyAsync(embed: MusicEmbed.Build()).ConfigureAwait(false);
+
+                    await output.CopyToAsync(Discord);
+
+                    CurrentlyPlaying = video;
+
                 }
                 finally
                 {
@@ -314,7 +372,7 @@ namespace DiscordNetBot
 
                     if (File.Exists(MusicHelpers.TitleToPath(video.Title)))
                     {
-                        File.Delete(video.Title);
+                        File.Delete(MusicHelpers.TitleToPath(video.Title));
                         Console.WriteLine($"Successfully deleted {video.Title}");
                     }
 
@@ -346,9 +404,9 @@ namespace DiscordNetBot
                 return null;
             }
 
-            var channelToJoin = channel ?? (Context.User as IGuildUser).VoiceChannel;
+            CurrentAudioChannel = channel ?? (Context.User as IGuildUser).VoiceChannel;
 
-            if (channelToJoin == null)
+            if (CurrentAudioChannel == null)
             {
                 embed = new EmbedBuilder
                 {
@@ -367,12 +425,12 @@ namespace DiscordNetBot
                 Title = $"Joined the Voice Channel",
                 Color = Color.Blue,
                 ThumbnailUrl = Context.User.GetAvatarUrl(),
-                Description = $"Successfully joined to the {channelToJoin.Name} Voice Channel requested by {Context.User.Username}."
+                Description = $"Successfully joined to the {CurrentAudioChannel.Name} Voice Channel requested by {Context.User.Username}."
             };
 
             await ReplyAsync(embed: embed.Build()).ConfigureAwait(false);
 
-            return await channelToJoin.ConnectAsync();
+            return await CurrentAudioChannel.ConnectAsync();
         }
 
         #endregion

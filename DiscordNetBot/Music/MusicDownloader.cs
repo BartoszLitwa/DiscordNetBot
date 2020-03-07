@@ -8,6 +8,7 @@ using System.IO;
 using System.Threading.Tasks;
 using VideoLibrary;
 using System.Linq;
+using YoutubeExtractor;
 
 namespace DiscordNetBot
 {
@@ -40,7 +41,28 @@ namespace DiscordNetBot
             var path = MusicHelpers.TitleToPath(video.Title.Remove(video.Title.IndexOf(ToDelete), ToDelete.Count()));
             await File.WriteAllBytesAsync(path, await video.GetBytesAsync()).ConfigureAwait(false);
 
-            Console.WriteLine($"Downloaded {video.Title} ({video.Resolution}) to {path}");
+            Console.WriteLine($"Downloaded {video.Title} ({video.Resolution})\n to {path}");
+
+            return await GetMusicFromTitle(video.Title);
+        }
+
+        public static async Task<MusicYT> DownloadAudioFromYT(string URL)
+        {
+            IEnumerable<VideoInfo> videoInfos = DownloadUrlResolver.GetDownloadUrls(URL);
+            VideoInfo video = videoInfos.Where(info => info.CanExtractAudio).OrderByDescending(info => info.AudioBitrate).First();
+
+            if (video.RequiresDecryption)
+                DownloadUrlResolver.DecryptDownloadUrl(video);
+
+            var audioDownloader = new AudioDownloader(video, MusicHelpers.TitleToPath(video.Title));
+
+            Console.WriteLine($"Started downloading {video.Title}. To download {audioDownloader.BytesToDownload / 1000000}MB.");
+            // Register the progress events. We treat the download progress as 85% of the progress and the extraction progress only as 15% of the progress,
+            // because the download will take much longer than the audio extraction.
+            audioDownloader.DownloadProgressChanged += (sender, args) => Console.WriteLine(args.ProgressPercentage * 0.85);
+            audioDownloader.AudioExtractionProgressChanged += (sender, args) => Console.WriteLine(85 + args.ProgressPercentage * 0.15);
+
+            await Task.Run(() => audioDownloader.Execute());
 
             return await GetMusicFromTitle(video.Title);
         }

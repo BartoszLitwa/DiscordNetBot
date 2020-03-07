@@ -1,6 +1,8 @@
 ﻿using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
+using DiscordNetBot.DataBase;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Configuration;
 using System.IO;
@@ -9,17 +11,37 @@ using System.Threading.Tasks;
 
 namespace DiscordNetBot
 {
-    public static class Bot
+    public class Bot
     {
         #region Public Properties
 
-        public static DiscordSocketClient Client;
+        public DiscordSocketClient Client;
 
-        public static CommandService CmdService;
+        public CommandService CmdService;
+
+        public IServiceProvider ServiceProvider;
 
         #endregion
 
-        public static async Task RunAsync()
+        #region Constructor
+
+        public Bot(IServiceProvider services)
+        {
+            ServiceProvider = services;
+
+            Task.Run(RunAsync).ConfigureAwait(false);
+        }
+
+        public IServiceProvider BuildServiceProvider() => new ServiceCollection()
+        .AddSingleton(Client)
+        .AddSingleton(CmdService)
+        .AddSingleton(ServiceProvider)
+        .AddSingleton<DatabaseContext>()
+        .BuildServiceProvider();
+
+        #endregion
+
+        public async Task RunAsync()
         {
             var config = new DiscordSocketConfig
             {
@@ -39,14 +61,14 @@ namespace DiscordNetBot
             var commandConfig = new CommandServiceConfig
             {
                 CaseSensitiveCommands = false,
-                DefaultRunMode = RunMode.Async
+                DefaultRunMode = RunMode.Async,
             };
 
             CmdService = new CommandService(commandConfig);
 
             Client.MessageReceived += HandleCommandAsync;
 
-            await CmdService.AddModulesAsync(Assembly.GetEntryAssembly(), null);
+            await CmdService.AddModulesAsync(Assembly.GetEntryAssembly(), ServiceProvider);
 
             //CmdService.AddTypeReader(typeof(bool), new BooleanTypeReader());
 
@@ -54,22 +76,20 @@ namespace DiscordNetBot
             await Task.Delay(-1);
         }
 
-        private static async Task Client_Ready()
+        private async Task Client_Ready()
         {
-            Console.WriteLine("Bot is Ready");
-
             await Client.SetGameAsync("Developed by CRNYY", type: ActivityType.Playing);
 
             Directory.CreateDirectory($"{Environment.CurrentDirectory}\\Musics");
 
             MusicDownloader.Initialize();
 
-            Emojis.Initialize();
+            MusicHelpers.DeleteMusicStored();
 
-            await MusicDownloader.GetSearchResults("Friz");
+            Console.WriteLine("Bot is Ready");
         }
 
-        private static async Task HandleCommandAsync(SocketMessage messageParam)
+        private async Task HandleCommandAsync(SocketMessage messageParam)
         {
             // Don't process the command if it was a system message
             var message = messageParam as SocketUserMessage;
@@ -79,7 +99,7 @@ namespace DiscordNetBot
             int argPos = 0;
 
             // Determine if the message is a command based on the prefix and make sure no bots trigger commands
-            if (!(message.HasCharPrefix('@', ref argPos) ||
+            if (!(message.HasCharPrefix(ConfigurationManager.AppSettings["Prefix"].ToCharArray()[0], ref argPos) ||
                 message.HasMentionPrefix(Client.CurrentUser, ref argPos)) ||
                 message.Author.IsBot)
                 return;
@@ -92,7 +112,7 @@ namespace DiscordNetBot
             await CmdService.ExecuteAsync(
                 context: context,
                 argPos: argPos,
-                services: null);
+                services: ServiceProvider);
         }
     }
 }

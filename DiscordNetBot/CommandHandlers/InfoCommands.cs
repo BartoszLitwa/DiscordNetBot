@@ -56,6 +56,21 @@ namespace DiscordNetBot
             await ReplyAsync(embed: infoEmbed.Build()).ConfigureAwait(false);
         }
 
+        [Command(nameof(Ping), true, RunMode = RunMode.Async)]
+        [Summary("Gets the info about the given user")]
+        public async Task Ping()
+        {
+            var embed = new EmbedBuilder
+            {
+                Title = "Ping",
+                Color = Color.Green,
+                Description = $"{Context.Client.Latency}ms Pong",
+                ThumbnailUrl = Context.Client.CurrentUser.GetAvatarUrl()
+            };
+
+            await ReplyAsync(embed: embed.Build()).ConfigureAwait(false);
+        }
+
         #endregion
     }
 }
