@@ -25,7 +25,7 @@ namespace DiscordNetBot.DataBase
             base.OnModelCreating(modelBuilder);
 
             // Fluent API
-            modelBuilder.Entity<User>().HasIndex(a => a.ID).IsUnique();
+            modelBuilder.Entity<User>().HasIndex(x => x.ID);
         }
 
         #endregion

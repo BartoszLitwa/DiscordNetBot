@@ -86,6 +86,8 @@ namespace DiscordNetBot
 
             MusicHelpers.DeleteMusicStored();
 
+            await ServiceProvider.GetService<DatabaseContext>().Database.EnsureCreatedAsync();
+
             Console.WriteLine("Bot is Ready");
         }
 

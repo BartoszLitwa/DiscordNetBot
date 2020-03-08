@@ -1,6 +1,7 @@
 ﻿using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
+using DiscordNetBot.DataBase;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -11,6 +12,21 @@ namespace DiscordNetBot
     /// </summary>
     public class InfoCommands : ModuleBase<SocketCommandContext>
     {
+        #region Private Properties
+
+        private readonly DatabaseContext Database;
+
+        #endregion
+
+        #region Constrcutor
+
+        public InfoCommands(DatabaseContext context)
+        {
+            Database = context;
+        }
+
+        #endregion
+
         #region Public Commands
 
         [Command(nameof(Info), true, RunMode = RunMode.Async)]

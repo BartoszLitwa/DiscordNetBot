@@ -1,6 +1,7 @@
 ﻿using Discord;
 using Discord.Audio;
 using Discord.Commands;
+using DiscordNetBot.DataBase;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -19,23 +20,25 @@ namespace DiscordNetBot
     {
         #region Public Properties
 
-        public static Queue<MusicYT> MusicQueue = new Queue<MusicYT>();
+        public readonly DatabaseContext Database;
 
-        public static bool MusicPlaying = false;
+        public Queue<MusicYT> MusicQueue = new Queue<MusicYT>();
 
-        public static AudioOutStream Discord;
+        public bool MusicPlaying = false;
 
-        public static MusicYT CurrentlyPlaying;
+        public AudioOutStream Discord;
 
-        public static IAudioChannel CurrentAudioChannel;
+        public MusicYT CurrentlyPlaying;
+
+        public IAudioChannel CurrentAudioChannel;
 
         #endregion
 
         #region Constructor
 
-        public MusicCommands()
+        public MusicCommands(DatabaseContext context)
         {
-            
+            Database = context;
         }
 
         #endregion
@@ -85,6 +88,7 @@ namespace DiscordNetBot
         }
 
         [Command(nameof(Play), RunMode = RunMode.Async)]
+        [Alias("p")]
         [Summary("Plays the music in the voice channel that it is in")]
         public async Task Play([Remainder] string Url)
         {
@@ -315,7 +319,7 @@ namespace DiscordNetBot
         {
             EmbedBuilder MusicEmbed;
 
-            using (var ffmpeg = CreateStream($"Musics\\{video.Title}.mp3"))
+            using (var ffmpeg = CreateStream($"{Environment.CurrentDirectory}\\Musics\\{video.Title}.mp3"))
             using (var output = ffmpeg.StandardOutput.BaseStream)
             using (Discord = client.CreatePCMStream(AudioApplication.Mixed))
             {
