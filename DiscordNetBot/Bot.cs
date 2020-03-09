@@ -88,6 +88,8 @@ namespace DiscordNetBot
 
             await ServiceProvider.GetService<DatabaseContext>().Database.EnsureCreatedAsync();
 
+            Riot.Initialize();
+
             Console.WriteLine("Bot is Ready");
         }
 
